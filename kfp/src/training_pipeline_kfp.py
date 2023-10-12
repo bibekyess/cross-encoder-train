@@ -20,8 +20,7 @@ import sentence_transformers
 import cloudpickle
 from sys import version_info
 
-from kubernetes import client, config
-import base64
+from kfp import kubernetes
 
 seed = 777
 # np.random.seed(seed)
@@ -37,14 +36,14 @@ logging.basicConfig(format='%(asctime)s - %(message)s',
 
 timestr = datetime.now().strftime("%y%m%d_%H%M")
 
-# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28')
+# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30')
 # def load_data_op(datasets_root: str, dataset_name: str, p_mask: float) -> NamedTuple(
 #                 'outputs', train_corpus=Dict[str, str], train_queries=Dict[str, str], train_triples= List[List[str]]):
 #     train_corpus, train_queries, train_triples = du.load_data(datasets_root, dataset_name, p_mask)
 #     outputs = NamedTuple('outputs', train_corpus=Dict[str, str], train_queries=Dict[str, str], train_triples= List[List[str]])
 #     return outputs(train_corpus, train_queries, train_triples)
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28')
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30')
 def load_data_op(datasets_root: str, dataset_name: str, p_mask: float,
                  train_corpus: Output[Dataset], train_queries: Output[Dataset], train_triples: Output[Dataset]) -> None:
     train_corpus_value, train_queries_value, train_triples_value = du.load_data(datasets_root, dataset_name, p_mask)
@@ -60,7 +59,7 @@ def load_data_op(datasets_root: str, dataset_name: str, p_mask: float,
 
 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28')
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30')
 def create_train_dev_triples_op(train_triples_all: Input[Dataset], train_triples: Output[Dataset], dev_triples: Output[Dataset]) -> None:
     
     with open(train_triples_all.path, "rb") as pickle_file:
@@ -75,7 +74,7 @@ def create_train_dev_triples_op(train_triples_all: Input[Dataset], train_triples
         pickle.dump(dev_triples_value, pickle_file)  
 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28')
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30')
 def create_dev_data_op(dev_triples: Input[Dataset], 
                        train_queries: Input[Dataset], 
                        train_corpus: Input[Dataset], 
@@ -97,7 +96,7 @@ def create_dev_data_op(dev_triples: Input[Dataset],
         pickle.dump(dev_samples_value, pickle_file) 
 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28',
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30',
                packages_to_install=['sentence-transformers', 'tqdm'])
 def create_train_data_op(dev_samples: Input[Dataset],
                          train_triples: Input[Dataset], 
@@ -124,27 +123,27 @@ def create_train_data_op(dev_samples: Input[Dataset],
     with open(train_samples.path, "wb") as pickle_file:
         pickle.dump(train_samples_value, pickle_file) 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28',
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30',
                packages_to_install=['sentence-transformers'])
 def get_model_op(load_model_name: str, num_labels: int, max_length: int, model: Output[Model]) -> None:
     cross_encoder_model = mu.get_model(model_name=load_model_name, num_labels=num_labels, max_length=max_length)
     torch.save(cross_encoder_model, model.path)
 
 
-# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28',
+# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30',
 #                packages_to_install=['torch', 'sentence-transformers', 'tqdm', 'numpy'])
 # def get_train_dataloader(train_samples: Dict[str, Any], train_batch_size: int):
 #     train_dataloader = mu.get_train_dataloader(dataset=train_samples, batch_size=train_batch_size)
 #     return train_dataloader
 
 
-# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28',
+# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30',
 #                packages_to_install=['torch', 'sentence-transformers', 'tqdm', 'numpy']):
 # def get_evaluator(dev_samples):
 #     evaluator = mu.get_evaluator(samples=dev_samples)
 #     return evaluator
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28',
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30',
                packages_to_install=['sentence-transformers', 'boto3'],
 )
 def train_model_op(model: Input[Model], num_epochs: int, evaluation_steps: int, warmup_steps: int,
@@ -175,7 +174,7 @@ def train_model_op(model: Input[Model], num_epochs: int, evaluation_steps: int, 
     torch.save(cross_encoder_model, output_model.path)
 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v28',
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v30',
                packages_to_install=['sentence-transformers', 'mlflow', 'cloudpickle', 'boto3'],
 )
 def log_model_mlflow_registry_op(model: Input[Model]) -> None:
@@ -213,7 +212,7 @@ def log_model_mlflow_registry_op(model: Input[Model]) -> None:
     )
 
 @dsl.pipeline
-def my_pipeline(aws_access_key_id: str, aws_secret_access_key: str) -> None:
+def my_pipeline() -> None:
     #First, we define the transformer model we want to fine-tune
     model_name = 'distill-kobert'
     load_model_name = "monologg/distilkobert"
@@ -263,24 +262,19 @@ def my_pipeline(aws_access_key_id: str, aws_secret_access_key: str) -> None:
                                     )
     log_model_mlflow_registry_task = log_model_mlflow_registry_op(model=train_model_task.output)
 
-    log_model_mlflow_registry_task.set_env_variable(name="MLFLOW_S3_ENDPOINT_URL", value="http://192.168.0.29:9000")
     log_model_mlflow_registry_task.set_env_variable(name="MLFLOW_S3_IGNORE_TLS", value="true")
-    log_model_mlflow_registry_task.set_env_variable(name="AWS_ACCESS_KEY_ID", value=aws_access_key_id)
-    log_model_mlflow_registry_task.set_env_variable(name="AWS_SECRET_ACCESS_KEY", value=aws_secret_access_key)
 
+    kubernetes.use_secret_as_env(log_model_mlflow_registry_task,
+                                    secret_name='mlflow-secret',
+                                    secret_key_to_env={'AWS_ACCESS_KEY_ID': 'AWS_ACCESS_KEY_ID'})
+    kubernetes.use_secret_as_env(log_model_mlflow_registry_task,
+                                    secret_name='mlflow-secret',
+                                    secret_key_to_env={'AWS_SECRET_ACCESS_KEY': 'AWS_SECRET_ACCESS_KEY'})
+    kubernetes.use_secret_as_env(log_model_mlflow_registry_task,
+                                    secret_name='mlflow-secret',
+                                    secret_key_to_env={'MLFLOW_S3_ENDPOINT_URL': 'MLFLOW_S3_ENDPOINT_URL'})    
 
-    # envs = ["MLFLOW_S3_ENDPOINT_URL", "AWS_ACCESS_KEY_ID" , "AWS_SECRET_ACCESS_KEY" , "MLFLOW_S3_IGNORE_TLS"]
-    # # set_env_variable(name: str, value: str)
-    # config.load_kube_config()
-    # v1 = client.CoreV1Api()
-    # kube_secret = v1.read_namespaced_secret("mlflow-secret", "kubeflow-user-example-com").data
-    # for name in envs:
-    #     log_model_mlflow_registry_task.set_env_variable(
-    #             name=name,
-    #             value= base64.b64decode(kube_secret.get(name)).decode('utf-8')
-    #             )
-
-def start_training_pipeline_run(aws_access_key_id: str, aws_secret_access_key: str) -> None:
+def start_training_pipeline_run() -> None:
     import requests
 
     USERNAME = "user@example.com"
@@ -308,24 +302,11 @@ def start_training_pipeline_run(aws_access_key_id: str, aws_secret_access_key: s
     custom_experiment = client.create_experiment('Custom Registry tracker', namespace=NAMESPACE)
 
     print(client.list_experiments())
-    run = client.create_run_from_pipeline_func(my_pipeline, experiment_name=custom_experiment.display_name, enable_caching=False,
-                                               arguments={
-                                                    'aws_access_key_id': aws_access_key_id, 
-                                                    'aws_secret_access_key': aws_secret_access_key
-                                               })
+    run = client.create_run_from_pipeline_func(my_pipeline, experiment_name=custom_experiment.display_name, enable_caching=False)
     url = f'{HOST}/#/runs/details/{run.run_id}'
     print(url)
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--aws_access_key_id", type=str, required=True, help= "MINIO Access Key ID")
-    parser.add_argument("--aws_secret_access_key", type=str, required=True, help= "MINIO Secret Access Key")
-    args = parser.parse_args()
-
-    aws_access_key_id = args.aws_access_key_id
-    aws_secret_access_key = args.aws_secret_access_key
-
-    start_training_pipeline_run(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
+    start_training_pipeline_run()
 
 
