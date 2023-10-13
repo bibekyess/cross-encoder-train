@@ -12,7 +12,7 @@ import model_utilities as mu
 
 from kfp import dsl
 from kfp.client import Client
-from kfp.dsl import Input, Output, Model, Dataset
+from kfp.dsl import Input, Output, Model, Dataset, Artifact
 
 import numpy as np
 import mlflow
@@ -37,14 +37,14 @@ logging.basicConfig(format='%(asctime)s - %(message)s',
 
 timestr = datetime.now().strftime("%y%m%d_%H%M")
 
-# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32')
+# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34')
 # def load_data_op(datasets_root: str, dataset_name: str, p_mask: float) -> NamedTuple(
 #                 'outputs', train_corpus=Dict[str, str], train_queries=Dict[str, str], train_triples= List[List[str]]):
 #     train_corpus, train_queries, train_triples = du.load_data(datasets_root, dataset_name, p_mask)
 #     outputs = NamedTuple('outputs', train_corpus=Dict[str, str], train_queries=Dict[str, str], train_triples= List[List[str]])
 #     return outputs(train_corpus, train_queries, train_triples)
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32')
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34')
 def load_data_op(datasets_root: str, dataset_name: str, p_mask: float,
                  train_corpus: Output[Dataset], train_queries: Output[Dataset], train_triples: Output[Dataset]) -> None:
     train_corpus_value, train_queries_value, train_triples_value = du.load_data(datasets_root, dataset_name, p_mask)
@@ -60,7 +60,7 @@ def load_data_op(datasets_root: str, dataset_name: str, p_mask: float,
 
 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32')
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34')
 def create_train_dev_triples_op(train_triples_all: Input[Dataset], train_triples: Output[Dataset], dev_triples: Output[Dataset]) -> None:
     
     with open(train_triples_all.path, "rb") as pickle_file:
@@ -75,7 +75,7 @@ def create_train_dev_triples_op(train_triples_all: Input[Dataset], train_triples
         pickle.dump(dev_triples_value, pickle_file)  
 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32')
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34')
 def create_dev_data_op(dev_triples: Input[Dataset], 
                        train_queries: Input[Dataset], 
                        train_corpus: Input[Dataset], 
@@ -97,7 +97,7 @@ def create_dev_data_op(dev_triples: Input[Dataset],
         pickle.dump(dev_samples_value, pickle_file) 
 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32',
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34',
                packages_to_install=['sentence-transformers', 'tqdm'])
 def create_train_data_op(dev_samples: Input[Dataset],
                          train_triples: Input[Dataset], 
@@ -124,44 +124,40 @@ def create_train_data_op(dev_samples: Input[Dataset],
     with open(train_samples.path, "wb") as pickle_file:
         pickle.dump(train_samples_value, pickle_file) 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32',
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34',
                packages_to_install=['sentence-transformers'])
 def get_model_op(load_model_name: str, num_labels: int, max_length: int, model: Output[Model]) -> None:
     cross_encoder_model = mu.get_model(model_name=load_model_name, num_labels=num_labels, max_length=max_length)
     torch.save(cross_encoder_model, model.path)
 
 
-# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32',
-#                packages_to_install=['torch', 'sentence-transformers', 'tqdm', 'numpy'])
-# def get_train_dataloader(train_samples: Dict[str, Any], train_batch_size: int):
-#     train_dataloader = mu.get_train_dataloader(dataset=train_samples, batch_size=train_batch_size)
-#     return train_dataloader
-
-
-# @dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32',
-#                packages_to_install=['torch', 'sentence-transformers', 'tqdm', 'numpy']):
-# def get_evaluator(dev_samples):
-#     evaluator = mu.get_evaluator(samples=dev_samples)
-#     return evaluator
-
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32',
-               packages_to_install=['sentence-transformers', 'boto3'],
-)
-def train_model_op(model: Input[Model], num_epochs: int, evaluation_steps: int, warmup_steps: int,
-                learning_rate: float,
-                train_samples: Input[Dataset], train_batch_size: int,
-                dev_samples: Input[Dataset],
-                output_model: Output[Model]) -> None:
-    with open(dev_samples.path, "rb") as pickle_file:
-        dev_samples_value = pickle.load(pickle_file)
-
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34')
+def get_train_dataloader_op(train_samples: Input[Dataset], train_batch_size: int, train_dataloader: Output[Artifact]) -> None:
     with open(train_samples.path, "rb") as pickle_file:
         train_samples_value = pickle.load(pickle_file)
+    train_dataloader_value = mu.get_train_dataloader(dataset=train_samples_value, batch_size=train_batch_size)
+    torch.save(train_dataloader_value, train_dataloader.path)    
 
-    train_dataloader = mu.get_train_dataloader(dataset=train_samples_value, batch_size=train_batch_size)
 
-    evaluator = mu.get_evaluator(samples=dev_samples_value)
-    
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34')
+def get_evaluator_op(dev_samples: Input[Dataset], evaluator: Output[Artifact]) -> None:
+    with open(dev_samples.path, "rb") as pickle_file:
+        dev_samples_value = pickle.load(pickle_file)
+    evaluator_val = mu.get_evaluator(samples=dev_samples_value)
+    torch.save(evaluator_val, evaluator.path)
+
+
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34',
+               packages_to_install=['sentence-transformers', 'boto3'],
+)
+def train_model_op(model: Input[Model], train_dataloader_store: Input[Artifact], 
+                evaluator_store: Input[Artifact],
+                num_epochs: int, evaluation_steps: int, warmup_steps: int,
+                learning_rate: float,
+                output_model: Output[Model]) -> None:
+
+    train_dataloader = torch.load(train_dataloader_store.path)
+    evaluator = torch.load(evaluator_store.path)
     cross_encoder_model = torch.load(model.path)
 
     cross_encoder_model.fit(train_dataloader=train_dataloader,
@@ -175,7 +171,7 @@ def train_model_op(model: Input[Model], num_epochs: int, evaluation_steps: int, 
     torch.save(cross_encoder_model, output_model.path)
 
 
-@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v32',
+@dsl.component(base_image='nvidia/cuda:11.8.0-base-ubuntu20.04', target_image='bibekyess/cross-encoder-train:v34',
                packages_to_install=['sentence-transformers', 'mlflow', 'cloudpickle', 'boto3'],
 )
 def log_model_mlflow_registry_op(model: Input[Model], mlflow_tracking_uri: str) -> None:
@@ -254,14 +250,16 @@ def my_pipeline(mlflow_uri: str) -> None:
                                                 pos_neg_ration= pos_neg_ration, 
                                                 max_train_samples = max_train_samples)
     get_model_task = get_model_op(load_model_name=load_model_name, num_labels=num_labels, max_length=max_length)
-    train_model_task = train_model_op(model=get_model_task.output, 
+    get_train_dataloader_task = get_train_dataloader_op(train_samples = create_train_data_task.output, train_batch_size=train_batch_size)
+    get_evaluator_task = get_evaluator_op(dev_samples = create_dev_data_task.output)
+
+    train_model_task = train_model_op(model=get_model_task.output,
+                                    train_dataloader_store = get_train_dataloader_task.output,
+                                    evaluator_store = get_evaluator_task.output,
                                     num_epochs=num_epochs, 
                                     evaluation_steps=evaluation_steps, 
                                     warmup_steps=warmup_steps,
                                     learning_rate=learning_rate,
-                                    train_samples= create_train_data_task.output, 
-                                    train_batch_size=train_batch_size,
-                                    dev_samples= create_dev_data_task.output
                                     )
     log_model_mlflow_registry_task = log_model_mlflow_registry_op(model=train_model_task.output, mlflow_tracking_uri=mlflow_uri)
 
